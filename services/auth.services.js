@@ -13,43 +13,32 @@ const login = async (params) => {
       return createResponse({
         status: 401,
         success: false,
-        // message: "Invalid email or password"
-        message: "User not found"
+        message: "User not found",
       });
     }
- 
 
     const isMatch = await bcrypt.compare(password, user.password);
-    
+
     if (!isMatch) {
       return createResponse({
         status: 401,
         success: false,
-        // message: "Invalid email or password"
-        message: "password mis matched"
+        message: "password mis matched",
       });
     }
-   console.log("login",user)
-    const accessToken = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "1h" }
-    );
+    console.log("login", user);
+    const accessToken = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
-    const refreshToken = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_SECRET,
-      { expiresIn: "7d" }
-    );
+    const refreshToken = jwt.sign({ userId: user._id }, process.env.JWT_SECRET, { expiresIn: "7d" });
 
     if (user.refreshToken.length >= 5) {
-     user.refreshToken.shift(); // remove the oldest
-    } 
+      user.refreshToken.shift(); // remove the oldest
+    }
 
     user.refreshToken.push({
-      token:refreshToken,
-      createdAt:new Date(),
-      device:params?.device || params?.userAgent || "unknown",
+      token: refreshToken,
+      createdAt: new Date(),
+      device: params?.device || params?.userAgent || "unknown",
       expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), // 7 days
     });
     await user.save();
@@ -65,52 +54,49 @@ const login = async (params) => {
         },
         accessToken: accessToken,
         refreshToken: refreshToken,
-      }
+      },
     });
-
   } catch (error) {
     console.error("Login Error:", error);
     return createResponse({
       status: 500,
       success: false,
-      message: `Server Error: ${error.message}`
+      message: `Server Error: ${error.message}`,
     });
   }
 };
 
-
-
 const signUp = async (params) => {
   try {
-    const { email, password, role="user" } = params;
+    const { name, email, password, role = "user" } = params;
 
     const existingUser = await userModel.findOne({ email, deletedAt: null });
     if (existingUser) {
-       return createResponse({
+      return createResponse({
         status: 400,
         success: false,
-        message: "User already exists."
+        message: "User already exists.",
       });
     }
 
     if (params.image?.length > 0) {
-    try {
-      const up = await uploadBinaryFile({ file: params.image[0], folder: "user" });
-      params.image = up;
-    } catch (uploadErr) {
-      return createResponse({
-      status: 500,
-      success: false,
-      message: `Image upload failed: ${uploadErr.message}`
-    });
-   }
-  } else {
-    delete params.image;
-  }
-    const newUser = await new userModel({ email, password,role, image: params.image,loginType: "local" }).save();
-    const accessToken= jwt.sign({ userId: newUser._id, role: newUser.role }, process.env.JWT_SECRET , { expiresIn: "1h" });
+      try {
+        const up = await uploadBinaryFile({ file: params.image[0], folder: "user" });
+        params.image = up;
+      } catch (uploadErr) {
+        return createResponse({
+          status: 500,
+          success: false,
+          message: `Image upload failed: ${uploadErr.message}`,
+        });
+      }
+    } else {
+      delete params.image;
+    }
+    const newUser = await new userModel({ email, password, name, role, image: params.image, loginType: "local" }).save();
+    const accessToken = jwt.sign({ userId: newUser._id, role: newUser.role }, process.env.JWT_SECRET, { expiresIn: "1h" });
 
-     return createResponse({
+    return createResponse({
       status: 201,
       message: "Sign-up Successfully",
       data: {
@@ -120,18 +106,17 @@ const signUp = async (params) => {
           role: newUser.role,
         },
         token: accessToken,
-      }
+      },
     });
   } catch (error) {
     console.log(error);
-     return createResponse({
+    return createResponse({
       status: 500,
       success: false,
-      message: `Server Error: ${error.message}`
+      message: `Server Error: ${error.message}`,
     });
   }
 };
-
 
 const refreshAccessToken = async (params) => {
   try {
@@ -139,10 +124,10 @@ const refreshAccessToken = async (params) => {
 
     if (!refreshToken) {
       return createResponse({
-        status:401,
-        success:false,
-        message:"Refresh token is required"
-      })
+        status: 401,
+        success: false,
+        message: "Refresh token is required",
+      });
     }
 
     // Decode and verify the token
@@ -150,54 +135,47 @@ const refreshAccessToken = async (params) => {
     try {
       decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
     } catch (err) {
-      
-       return createResponse({
-        status:403,
-        success:false,
-        message: "Invalid or expired refresh token"
-      })
+      return createResponse({
+        status: 403,
+        success: false,
+        message: "Invalid or expired refresh token",
+      });
     }
 
     const user = await userModel.findOne({ _id: decoded.userId, deletedAt: null });
     if (!user) {
-        return createResponse({
-        status:404,
-        success:false,
-        message: "User not found"
-      })
+      return createResponse({
+        status: 404,
+        success: false,
+        message: "User not found",
+      });
     }
 
     // Check if token exists in DB
-    const storedToken = user.refreshToken.find(
-      (t) => t.token === refreshToken
-    );
+    const storedToken = user.refreshToken.find((t) => t.token === refreshToken);
 
     if (!storedToken) {
-        return createResponse({
-        status:403,
-        success:false,
-        message:"Refresh token not recognized"
-      })
+      return createResponse({
+        status: 403,
+        success: false,
+        message: "Refresh token not recognized",
+      });
     }
 
     // Check if token expired
     if (storedToken.expiresAt && new Date() > storedToken.expiresAt) {
       // Optional: remove expired token from DB
-      user.refreshToken = user.refreshToken.filter(t => t.token !== refreshToken);
+      user.refreshToken = user.refreshToken.filter((t) => t.token !== refreshToken);
       await user.save();
       return createResponse({
-        status:403,
-        success:false,
-        message:"Refresh token expired"
-      })
+        status: 403,
+        success: false,
+        message: "Refresh token expired",
+      });
     }
 
     // Issue new access token
-    const newAccessToken = jwt.sign(
-      { userId: user._id, role: user.role },
-      process.env.JWT_SECRET,
-      { expiresIn: "15m" }
-    );
+    const newAccessToken = jwt.sign({ userId: user._id, role: user.role }, process.env.JWT_SECRET, { expiresIn: "15m" });
 
     // return res.status(200).json({
     //   message: "Access token refreshed",
@@ -205,20 +183,19 @@ const refreshAccessToken = async (params) => {
     // });
 
     return createResponse({
-      status:200,
-      success:"success",
-      message:"Access token refreshed",
-      data:{accessToken: newAccessToken},
-    })
+      status: 200,
+      success: "success",
+      message: "Access token refreshed",
+      data: { accessToken: newAccessToken },
+    });
   } catch (error) {
     console.error("Refresh Token Error:", error);
-      return createResponse({
+    return createResponse({
       status: 500,
       success: false,
-      message: `Server Error: ${error.message}`
+      message: `Server Error: ${error.message}`,
     });
   }
 };
 
-
-module.exports = { login, signUp,refreshAccessToken };
+module.exports = { login, signUp, refreshAccessToken };

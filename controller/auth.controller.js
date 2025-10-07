@@ -4,7 +4,7 @@ const AuthService = require("../services/auth.services");
 const login = async (req, res) => {
   try {
     const userAgent = req.headers["user-agent"];
-    const result = await AuthService.login({ ...req.body,userAgent });
+    const result = await AuthService.login({ ...req.body, userAgent });
     return res.status(result.status).json(result);
   } catch (error) {
     console.error("Login Error:", error);
@@ -25,17 +25,17 @@ const signup = async (req, res) => {
 };
 
 //refresh-token
-const refreshAccessToken=async(req,res)=>{
+const refreshAccessToken = async (req, res) => {
   try {
-    const refreshToken=req.headers['x-refresh-token']
-    const result=await AuthService.refreshAccessToken({
-      refreshToken
-    })
-    return res.status(result.status).json(result)
+    const refreshToken = req.headers["x-refresh-token"];
+    const result = await AuthService.refreshAccessToken({
+      refreshToken,
+    });
+    return res.status(result.status).json(result);
   } catch (error) {
     console.error("Signup Error:", error);
-    return res.status(500).json({ status: 500, message: "Internal server error" })
+    return res.status(500).json({ status: 500, message: "Internal server error" });
   }
-}
+};
 
-module.exports = { login, signup,refreshAccessToken };
+module.exports = { login, signup, refreshAccessToken };
