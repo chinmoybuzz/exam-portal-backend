@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Gemini Assessment Portal</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Configure Tailwind for Inter font and custom theme -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#4f46e5',
+                        'primary-dark': '#4338ca',
+                        'danger': '#ef4444',
+                        'success': '#10b981',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Set Inter as default font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6;
+        }
+
+        /* Custom scrollbar for question nav for better UX */
+        #question-nav::-webkit-scrollbar {
+            height: 8px;
+        }
+
+        #question-nav::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
+        }
+
+        #question-nav::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col">
+
+    <!-- Main Application Container -->
+    <div id="app"
+        class="flex flex-col md:flex-row flex-grow w-full max-w-7xl mx-auto p-4 md:p-8 space-y-4 md:space-y-0 md:space-x-8">
+
+        <!-- Left Sidebar (Timer and Navigation) -->
+        <div
+            class="md:w-1/4 w-full bg-white shadow-xl rounded-xl p-5 space-y-6 flex flex-col h-full md:sticky md:top-8">
+            <h3 class="text-lg font-semibold text-gray-800 border-b pb-3 mb-3">Exam Status</h3>
+
+            <!-- Timer Card -->
+            <div class="text-center p-4 bg-primary rounded-lg shadow-md">
+                <p class="text-white text-sm font-medium">Time Remaining</p>
+                <div id="timer" class="text-white text-4xl font-extrabold mt-1">--:--</div>
+            </div>
+
+            <!-- User Info / Status -->
+            <div>
+                <p class="text-sm font-medium text-gray-500">Authenticated User ID:</p>
+                <p id="user-id" class="text-xs text-gray-700 break-all bg-gray-100 p-2 rounded-lg mt-1">Loading...</p>
+            </div>
+
+            <!-- Question Navigation Grid -->
+            <div class="flex-grow">
+                <!-- Changed: Give this element a unique ID so we can target it correctly -->
+                <p id="nav-header" class="text-sm font-medium text-gray-700 mb-3">Question Navigator (0/10)</p>
+
+                <!-- Horizontal scrollable on mobile, vertical wrap on desktop -->
+                <div id="question-nav"
+                    class="flex flex-row md:flex-wrap gap-2 overflow-x-auto pb-2 md:overflow-hidden md:h-96">
+                    <!-- Question buttons injected here by JS -->
+                </div>
+            </div>
+
+            <!-- Submit Exam Button -->
+            <button onclick="submitExam()" id="submit-btn"
+                class="w-full bg-danger text-white py-3 rounded-xl font-bold hover:bg-red-600 transition duration-150 shadow-lg mt-4">
+                Finish & Submit Exam
+            </button>
+        </div>
+
+        <!-- Right Main Content (Question Area) -->
+        <div class="md:w-3/4 w-full bg-white shadow-xl rounded-xl p-6 md:p-8 space-y-6">
+            <h1 class="text-2xl font-bold text-gray-800">Introduction to Web Development Assessment</h1>
+
+            <!-- Question Card -->
+            <div id="question-card" class="border border-gray-200 rounded-lg p-5">
+                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <h2 class="text-xl font-semibold text-primary">Question <span id="current-q-index">1</span> of 10
+                    </h2>
+                    <span id="q-status"
+                        class="px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Unanswered</span>
+                </div>
+
+                <p id="question-text" class="text-gray-900 text-lg mb-6">
+                    Loading question content...
+                </p>
+
+                <!-- Options List -->
+                <div id="options-container" class="space-y-3">
+                    <!-- Options are injected here by JS -->
+                    <div class="py-4 text-gray-500 text-center">Please wait while questions load...</div>
+                </div>
+
+            </div>
+
+            <!-- Navigation Controls -->
+            <div class="flex justify-between pt-4 border-t">
+                <button onclick="prevQuestion()" id="prev-btn"
+                    class="px-6 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-150 disabled:opacity-50"
+                    disabled>
+                    ← Previous
+                </button>
+                <button onclick="nextQuestion()" id="next-btn"
+                    class="px-6 py-2 bg-primary text-white font-semibold rounded-lg shadow-md hover:bg-primary-dark transition duration-150 disabled:opacity-50">
+                    Next →
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, getDoc, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // IMPORTANT: Firebase Global Variables (Mandatory)
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-exam-app-id';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+        const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
+
+        let db;
+        let auth;
+        let userId = null;
+        let isAuthReady = false;
+
+        // --- GLOBAL STATE ---
+        let examState = {
+            questions: [],
+            currentQuestionIndex: 0,
+            userAnswers: {}, // { qId: selectedOptionIndex }
+            examDurationSeconds: 10 * 60, // 10 minutes
+            timeLeftSeconds: 0,
+            examId: 'sample-webdev-quiz',
+            isSubmitted: false
+        };
+
+        const QUESTIONS = [
+            { id: 1, text: "Which language is used to structure content on a webpage?", options: ["CSS", "JavaScript", "HTML", "Python"], answer: 2 },
+            { id: 2, text: "Which CSS property is used to change the text color of an element?", options: ["background-color", "color", "font-style", "text-decoration"], answer: 1 },
+            { id: 3, text: "Which function is used to output data to the console in JavaScript?", options: ["print()", "log()", "console.log()", "display()"], answer: 2 },
+            { id: 4, text: "In MongoDB, what is the equivalent of a 'table' in a relational database?", options: ["Row", "Collection", "Schema", "Document"], answer: 1 },
+            { id: 5, text: "What does the 'A' stand for in AJAX?", options: ["Asynchronous", "Active", "Automatic", "Application"], answer: 0 },
+            { id: 6, text: "Which HTML tag is used to define an internal style sheet?", options: ["<style>", "<script>", "<css>", "<link>"], answer: 0 },
+            { id: 7, text: "The use of 'let' and 'const' for variable declaration was introduced in which ECMAScript version?", options: ["ES5", "ES6 / ES2015", "ES2016", "ES2020"], answer: 1 },
+            { id: 8, text: "Which HTTP method is typically idempotent?", options: ["POST", "GET", "DELETE", "Both GET and DELETE"], answer: 3 },
+            { id: 9, text: "What is the primary purpose of a Firebase Realtime Database (as opposed to Firestore)?", options: ["For complex SQL queries", "For large static files", "Low-latency data synchronization", "Offline-only storage"], answer: 2 },
+            { id: 10, text: "What does CORS stand for?", options: ["Cross-Origin Resource Sharing", "Centralized Operating Resource System", "Custom Object Request Server", "Content Open Relay Standard"], answer: 0 },
+        ];
+
+
+        // --- FIREBASE INITIALIZATION & AUTH ---
+
+        async function initFirebase() {
+            try {
+                if (Object.keys(firebaseConfig).length === 0) {
+                    console.error("Firebase config is missing. Using local data only.");
+                    setupLocalExam();
+                    return;
+                }
+
+                setLogLevel('Debug');
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Authenticate
+                if (initialAuthToken) {
+                    await signInWithCustomToken(auth, initialAuthToken);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                // Set up auth listener
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        userId = user.uid;
+                        document.getElementById('user-id').textContent = userId;
+                        isAuthReady = true;
+                        console.log("Firebase Auth Ready. User:", userId);
+
+                        // Once authenticated, start the exam logic
+                        setupExamListeners();
+                        startTimer();
+                    } else {
+                        // Fallback to anonymous if token fails
+                        signInAnonymously(auth).then(anonUser => {
+                            userId = anonUser.user.uid;
+                            document.getElementById('user-id').textContent = userId + " (Anon)";
+                            isAuthReady = true;
+                            setupExamListeners();
+                            startTimer();
+                        });
+                    }
+                });
+
+            } catch (error) {
+                console.error("Error initializing Firebase:", error);
+                document.getElementById('user-id').textContent = "Auth Error: See Console";
+            }
+        }
+
+        function setupLocalExam() {
+            examState.questions = QUESTIONS;
+            examState.timeLeftSeconds = examState.examDurationSeconds;
+            // Initialize userAnswers object for all questions
+            QUESTIONS.forEach(q => examState.userAnswers[q.id] = null);
+            isAuthReady = true;
+            loadQuestion();
+            startTimer();
+            document.getElementById('user-id').textContent = "Local Mode";
+        }
+
+        // --- FIREBASE FIRESTORE LOGIC ---
+
+        function getExamDocRef() {
+            if (!db || !userId) return null;
+            // Public data structure for simplicity in this example
+            // Path: /artifacts/{appId}/users/{userId}/user_exams/{examId}
+            const userExamsCollection = collection(db, `artifacts/${appId}/users/${userId}/user_exams`);
+            return doc(userExamsCollection, examState.examId);
+        }
+
+        async function setupExamListeners() {
+            if (!isAuthReady || !db) return;
+
+            const examRef = getExamDocRef();
+
+            // 1. Check if exam exists. If not, create it.
+            const docSnap = await getDoc(examRef);
+            if (!docSnap.exists()) {
+                console.log("No existing exam found. Creating new one.");
+                await setDoc(examRef, {
+                    questions: QUESTIONS.map(q => ({ id: q.id, text: q.text, options: q.options })),
+                    startTime: new Date().toISOString(),
+                    userAnswers: {},
+                    isSubmitted: false
+                });
+            }
+
+            // 2. Listen for real-time updates (answers and submission status)
+            onSnapshot(examRef, (doc) => {
+                if (doc.exists()) {
+                    const data = doc.data();
+                    examState.questions = QUESTIONS; // Use hardcoded questions but sync answers
+                    examState.userAnswers = data.userAnswers || {};
+                    examState.isSubmitted = data.isSubmitted || false;
+
+                    if (examState.isSubmitted) {
+                        // Prevent any further action if submitted
+                        document.getElementById('question-text').textContent = "EXAM SUBMITTED. Thank you!";
+                        document.getElementById('options-container').innerHTML = `<div class="text-success font-bold text-center p-8">Your answers have been locked and saved.</div>`;
+                        document.getElementById('prev-btn').disabled = true;
+                        document.getElementById('next-btn').disabled = true;
+                        document.getElementById('submit-btn').disabled = true;
+                        clearInterval(window.timerInterval); // Stop the timer
+                    }
+
+                    loadQuestion(examState.currentQuestionIndex);
+                    renderNavGrid();
+
+                } else {
+                    console.error("Exam document not found during snapshot.");
+                }
+            }, (error) => {
+                console.error("Error listening to Firestore:", error);
+            });
+        }
+
+        async function saveAnswerToFirestore(qId, answerIndex) {
+            if (!isAuthReady || !db || examState.isSubmitted) return;
+
+            const examRef = getExamDocRef();
+            const newAnswers = { ...examState.userAnswers, [qId]: answerIndex };
+
+            // Only update the answers field
+            try {
+                await setDoc(examRef, { userAnswers: newAnswers }, { merge: true });
+                console.log(`Answer for Q${qId} saved.`);
+            } catch (e) {
+                console.error("Error saving answer:", e);
+            }
+        }
+
+        async function submitExam() {
+            if (!isAuthReady || !db || examState.isSubmitted) return;
+
+            // Use a custom modal instead of window.confirm
+            if (!confirm('Are you sure you want to finish and submit the exam? You cannot make changes afterwards.')) {
+                return;
+            }
+
+            const examRef = getExamDocRef();
+            try {
+                await setDoc(examRef, { isSubmitted: true, endTime: new Date().toISOString() }, { merge: true });
+                console.log("Exam successfully submitted!");
+                // UI update will happen via the onSnapshot listener
+            } catch (e) {
+                console.error("Error submitting exam:", e);
+            }
+        }
+        window.submitExam = submitExam; // Expose to global scope for button click
+
+        // --- TIMER LOGIC ---
+
+        function startTimer() {
+            examState.timeLeftSeconds = examState.examDurationSeconds;
+            const timerElement = document.getElementById('timer');
+            const submitButton = document.getElementById('submit-btn');
+
+            const updateTimer = () => {
+                if (examState.isSubmitted) return clearInterval(window.timerInterval);
+
+                if (examState.timeLeftSeconds <= 0) {
+                    clearInterval(window.timerInterval);
+                    timerElement.textContent = "TIME UP!";
+                    timerElement.parentElement.classList.replace('bg-primary', 'bg-danger');
+                    submitExam(); // Auto-submit when time runs out
+                    return;
+                }
+
+                if (examState.timeLeftSeconds <= 60) { // Last minute warning
+                    timerElement.parentElement.classList.replace('bg-primary', 'bg-danger');
+                } else if (examState.timeLeftSeconds <= 120) { // Last two minutes warning
+                    timerElement.parentElement.classList.replace('bg-primary', 'bg-yellow-600');
+                } else {
+                    timerElement.parentElement.classList.replace('bg-danger', 'bg-primary');
+                    timerElement.parentElement.classList.replace('bg-yellow-600', 'bg-primary');
+                }
+
+                const minutes = Math.floor(examState.timeLeftSeconds / 60);
+                const seconds = examState.timeLeftSeconds % 60;
+                timerElement.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+
+                examState.timeLeftSeconds--;
+            };
+
+            // Clear any existing interval before starting a new one
+            if (window.timerInterval) {
+                clearInterval(window.timerInterval);
+            }
+
+            updateTimer(); // Initial call
+            window.timerInterval = setInterval(updateTimer, 1000);
+        }
+
+        // --- UI AND NAVIGATION LOGIC ---
+
+        function loadQuestion(index = examState.currentQuestionIndex) {
+            if (examState.questions.length === 0) return;
+            if (index < 0) index = 0;
+            if (index >= examState.questions.length) index = examState.questions.length - 1;
+
+            examState.currentQuestionIndex = index;
+            const q = examState.questions[index];
+            const selectedAnswer = examState.userAnswers[q.id];
+
+            // 1. Update question text and index
+            document.getElementById('current-q-index').textContent = index + 1;
+            document.getElementById('question-text').textContent = `${index + 1}. ${q.text}`;
+
+            // 2. Update navigation buttons
+            document.getElementById('prev-btn').disabled = index === 0 || examState.isSubmitted;
+            document.getElementById('next-btn').disabled = index === examState.questions.length - 1 || examState.isSubmitted;
+
+            // 3. Render options
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = q.options.map((option, optionIndex) => {
+                const isSelected = optionIndex === selectedAnswer;
+                const baseClasses = "flex items-center p-4 rounded-xl cursor-pointer transition duration-150 border-2";
+                const stateClasses = isSelected
+                    ? "bg-primary text-white border-primary shadow-lg"
+                    : "bg-gray-50 text-gray-800 border-gray-200 hover:bg-gray-100";
+
+                return `
+                    <div 
+                        class="${baseClasses} ${stateClasses}"
+                        onclick="selectAnswer(${q.id}, ${optionIndex})"
+                        data-option-index="${optionIndex}"
+                    >
+                        <span class="font-bold mr-4">${String.fromCharCode(65 + optionIndex)}.</span>
+                        <p class="flex-grow">${option}</p>
+                        ${isSelected ? '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                    </div>
+                `;
+            }).join('');
+
+            // 4. Update status indicator
+            const statusEl = document.getElementById('q-status');
+            if (selectedAnswer !== null && selectedAnswer !== undefined) {
+                statusEl.textContent = 'Answered';
+                statusEl.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-success text-white';
+            } else {
+                statusEl.textContent = 'Unanswered';
+                statusEl.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800';
+            }
+
+            // Re-render navigation grid to reflect status change
+            renderNavGrid();
+        }
+        window.loadQuestion = loadQuestion; // Expose
+
+        function selectAnswer(qId, optionIndex) {
+            if (examState.isSubmitted) return;
+
+            // Update local state immediately for fast feedback
+            examState.userAnswers = { ...examState.userAnswers, [qId]: optionIndex };
+
+            // Persist to Firestore
+            saveAnswerToFirestore(qId, optionIndex);
+
+            // Reload UI to show selection
+            loadQuestion(examState.currentQuestionIndex);
+        }
+        window.selectAnswer = selectAnswer; // Expose
+
+        function prevQuestion() {
+            if (examState.currentQuestionIndex > 0) {
+                loadQuestion(examState.currentQuestionIndex - 1);
+            }
+        }
+        window.prevQuestion = prevQuestion; // Expose
+
+        function nextQuestion() {
+            if (examState.currentQuestionIndex < examState.questions.length - 1) {
+                loadQuestion(examState.currentQuestionIndex + 1);
+            }
+        }
+        window.nextQuestion = nextQuestion; // Expose
+
+
+        function renderNavGrid() {
+            const navContainer = document.getElementById('question-nav');
+            const totalAnswered = Object.keys(examState.userAnswers).filter(key => examState.userAnswers[key] !== null && examState.userAnswers[key] !== undefined).length;
+
+            // TARGETING the new ID 'nav-header' to update the question count
+            const navHeader = document.getElementById('nav-header');
+            if (navHeader) {
+                navHeader.textContent = `Question Navigator (${totalAnswered}/${examState.questions.length})`;
+            }
+
+
+            navContainer.innerHTML = examState.questions.map((q, index) => {
+                const qId = q.id;
+                const isAnswered = examState.userAnswers[qId] !== null && examState.userAnswers[qId] !== undefined;
+                const isCurrent = index === examState.currentQuestionIndex;
+
+                let baseClasses = "flex items-center justify-center w-10 h-10 rounded-lg font-bold text-sm transition duration-150 shadow-md cursor-pointer";
+
+                if (isCurrent) {
+                    baseClasses += " ring-4 ring-primary ring-opacity-50 border-4 border-white bg-primary text-white scale-110";
+                } else if (isAnswered) {
+                    baseClasses += " bg-success text-white hover:bg-green-600";
+                } else {
+                    baseClasses += " bg-gray-200 text-gray-700 hover:bg-gray-300";
+                }
+
+                return `
+                    <button 
+                        class="${baseClasses}" 
+                        onclick="loadQuestion(${index})"
+                        ${examState.isSubmitted ? 'disabled' : ''}
+                    >
+                        ${index + 1}
+                    </button>
+                `;
+            }).join('');
+        }
+        window.renderNavGrid = renderNavGrid; // Expose
+
+        // --- INITIAL KICKOFF ---
+        window.onload = initFirebase;
+
+        // Safety function for modal/confirm replacement
+        function confirm(message) {
+            return window.confirm(message);
+        }
+
+    </script>
+</body>
+
+</html>`

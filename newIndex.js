@@ -43,10 +43,11 @@ async function start() {
     app.use("/api/v1", apiRoute);
     const server = require("http").createServer(app);
     initialize(server); // for socket
+    await connectDB();
     server.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}`);
     });
-    await connectDB();
+
     // Catch server errors (e.g., port in use)
     server.on("error", (err) => {
       console.error(`Server failed: ${err.message}`);

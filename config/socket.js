@@ -1,13 +1,13 @@
 const socketIo = require("socket.io");
 
 //auth
-const socketAuthMiddleware=require("../socket/middlewares/auth")
+const socketAuthMiddleware = require("../socket/middlewares/auth");
 
 //handlers
 const chatHandler = require("../socket/handler/chatHandler");
+const timerHandler = require("../socket/handler/timer");
 const notificationHandler = require("../socket/handler/notificationHandler");
 const continueDataHandler = require("../socket/handler/continueData");
-
 
 const _ = require("lodash");
 let io;
@@ -24,9 +24,10 @@ function initialize(server) {
   // io.use(socketAuthMiddleware);
 
   io.on("connection", (socket) => {
-    console.log("Client connected:", socket.id);
+    // console.log("Client connected:", socket.id);
+    timerHandler(io, socket);
     // Delegate events
-    continueDataHandler(io,socket);
+    // continueDataHandler(io, socket);
     // chatHandler(io, socket);
     // notificationHandler(io, socket);
     socket.on("disconnect", () => {
