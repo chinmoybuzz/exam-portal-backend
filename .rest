@@ -15,3 +15,45 @@ Content-Type: application/json
     "email": "admin@mail.com",
     "password": "Admin@123"
 }
+### Question
+### list
+GET  http://localhost:3000/api/v1/questions/list
+Content-Type: application/json
+
+{
+}
+
+
+### Add
+POST http://localhost:3000/api/v1/questions/add
+Content-Type: application/json
+
+{
+    "questionText": "Which HTTP method is idempotent and safe?",
+    "type": "MCQ_Single",
+    "options": [
+        {
+            "text": "POST",
+            "isCorrect": false
+        },
+        {
+            "text": "GET",
+            "isCorrect": true
+        },
+        {
+            "text": "PUT",
+            "isCorrect": false
+        },
+        {
+            "text": "DELETE",
+            "isCorrect": false
+        }
+    ],
+    "correctAnswer": {
+        "expectedValue": "GET"
+    },
+    "difficulty": "Easy",
+    "points": 5,
+    "category": "65b8c3d81b2a9d001f3e7b23", 
+    "explanation": "The GET method only retrieves data and doesn't change server state, making it both safe and idempotent."
+}

@@ -111,6 +111,7 @@ module.exports = function timerHandler(io, socket) {
 
   // 2. Handle client request to start a new timer
   socket.on("timer:start", (data) => {
+    console.log(data);
     const durationSeconds = parseInt(data.duration, 10);
 
     if (isNaN(durationSeconds) || durationSeconds <= 0) {

@@ -3,9 +3,11 @@ const socketIo = require("socket.io");
 //auth
 const socketAuthMiddleware = require("../socket/middlewares/auth");
 
+//exam portal
+const timerHandler = require("../socket/handler/timer");
+const examHandler = require("../socket/handler/exam");
 //handlers
 const chatHandler = require("../socket/handler/chatHandler");
-const timerHandler = require("../socket/handler/timer");
 const notificationHandler = require("../socket/handler/notificationHandler");
 const continueDataHandler = require("../socket/handler/continueData");
 
@@ -21,11 +23,12 @@ function initialize(server) {
     },
   });
 
-  // io.use(socketAuthMiddleware);
+  io.use(socketAuthMiddleware);
 
   io.on("connection", (socket) => {
-    // console.log("Client connected:", socket.id);
+    console.log("Client connected:", socket.id);
     timerHandler(io, socket);
+    examHandler(io, socket);
     // Delegate events
     // continueDataHandler(io, socket);
     // chatHandler(io, socket);

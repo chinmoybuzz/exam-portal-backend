@@ -4,183 +4,654 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Socket.IO Synchronized Timer Client</title>
-    <!-- Load Tailwind CSS -->
+    <title>The Gemini Assessment Portal (Socket.IO)</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        'primary': '#4f46e5',
+                        'primary-dark': '#4338ca',
+                        'danger': '#ef4444',
+                        'success': '#10b981',
+                        'emerald': {
+                            '500': '#10b981',
+                            '600': '#059669',
+                            '700': '#047857',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
     <style>
+        /* Set Inter as default font */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f9fb;
+            background-color: #f3f4f6;
         }
 
-        .timer-display {
-            font-size: 4rem;
-            font-weight: 700;
-            color: #10b981;
-            /* Emerald 500 */
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        /* Custom scrollbar for question nav for better UX */
+        #question-nav::-webkit-scrollbar {
+            height: 8px;
         }
 
-        .card {
-            background: white;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            border: 1px solid #e5e7eb;
+        #question-nav::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 4px;
         }
 
-        .finished {
-            color: #ef4444;
-            /* Red 500 */
+        #question-nav::-webkit-scrollbar-thumb:hover {
+            background: #9ca3af;
         }
     </style>
 </head>
 
-<body class="min-h-screen flex flex-col items-center justify-center p-4">
+<body class="min-h-screen flex flex-col">
 
-    <div class="card rounded-xl p-8 w-full max-w-md text-center">
-        <h1 class="text-2xl font-bold text-gray-800 mb-4">Global Socket.IO Timer</h1>
-        <p class="text-lg font-medium text-gray-500 mb-4" id="timer-status">Connecting to server...</p>
+    <div id="app"
+        class="flex flex-col md:flex-row flex-grow w-full max-w-7xl mx-auto p-4 md:p-8 space-y-4 md:space-y-0 md:space-x-8">
 
-        <div id="timer-value" class="timer-display">
-            --:--:--
-        </div>
+        <div
+            class="md:w-1/4 w-full bg-white shadow-xl rounded-xl p-5 space-y-6 flex flex-col h-full md:sticky md:top-8">
+            <h3 class="text-lg font-semibold text-gray-800 border-b pb-3 mb-3">Exam Status</h3>
 
-        <p class="text-sm text-gray-400 mt-2" id="server-message"></p>
-    </div>
+            <div class="space-y-4">
+                <div class="text-center p-4 bg-primary rounded-lg shadow-md">
+                    <p class="text-white text-sm font-medium">Time Remaining</p>
+                    <div id="timer" class="text-white text-4xl font-extrabold mt-1">--:--</div>
+                </div>
 
-    <!-- Timer Control Card -->
-    <div class="card rounded-xl p-6 w-full max-w-md mt-6">
-        <h2 class="text-xl font-semibold text-gray-700 mb-4">Start New Timer (Server Reset)</h2>
-        <div class="flex flex-col sm:flex-row gap-4">
-            <input type="number" id="duration-input" value="5" min="1"
-                class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
-                placeholder="Duration in minutes">
-            <button id="set-timer-button"
-                class="bg-emerald-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition duration-150">
-                Set 5 Minute Timer
+                <div class="flex flex-col space-y-2">
+                    <label for="duration-input" class="text-xs font-medium text-gray-500">Set Custom Duration
+                        (Mins)</label>
+                    <div class="flex items-center space-x-2">
+                        <input type="number" id="duration-input" value="5" min="1"
+                            class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                            placeholder="Duration in minutes">
+                        <button id="set-timer-button" onclick="setTimer()"
+                            class="bg-emerald-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition duration-150 text-sm whitespace-nowrap">
+                            Set 5 Min Timer
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div>
+                <p class="text-sm font-medium text-gray-500">User ID (Socket):</p>
+                <p id="user-id" class="text-xs text-gray-700 break-all bg-gray-100 p-2 rounded-lg mt-1">Connecting...
+                </p>
+            </div>
+
+            <div class="flex-grow">
+                <p id="nav-header" class="text-sm font-medium text-gray-700 mb-3">Question Navigator (0/10)</p>
+
+                <div id="question-nav"
+                    class="flex flex-row md:flex-wrap gap-2 overflow-x-auto pb-2 md:overflow-hidden md:h-96">
+                    <div class="text-center text-gray-500 w-full">Waiting for connection...</div>
+                </div>
+            </div>
+
+            <button onclick="submitExam()" id="submit-btn"
+                class="w-full bg-danger text-white py-3 rounded-xl font-bold hover:bg-red-600 transition duration-150 shadow-lg mt-4">
+                Finish & Submit Exam
             </button>
         </div>
-        <p class="text-xs text-gray-400 mt-2">This sends a Socket.IO message to reset the timer for everyone.</p>
+
+        <div class="md:w-3/4 w-full bg-white shadow-xl rounded-xl p-6 md:p-8 space-y-6">
+            <h1 class="text-2xl font-bold text-gray-800">Introduction to Web Development Assessment</h1>
+
+            <div id="question-card" class="border border-gray-200 rounded-lg p-5">
+                <div class="flex justify-between items-center mb-4 border-b pb-3">
+                    <h2 class="text-xl font-semibold text-primary">Question <span id="current-q-index">1</span> of 10
+                    </h2>
+                    <span id="q-status"
+                        class="px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800">Unanswered</span>
+                </div>
+
+                <p id="question-text" class="text-gray-900 text-lg mb-6">
+                    Connecting to server to load exam...
+                </p>
+
+                <div id="options-container" class="space-y-3">
+                    <div class="py-4 text-gray-500 text-center">Please wait while questions load...</div>
+                </div>
+
+            </div>
+
+            <div class="flex justify-between pt-4 border-t">
+                <button onclick="prevQuestion()" id="prev-btn"
+                    class="px-6 py-2 bg-gray-200 text-gray-700 font-semibold rounded-lg shadow-md hover:bg-gray-300 transition duration-150 disabled:opacity-50"
+                    disabled>
+                    ← Previous
+                </button>
+                <button onclick="nextQuestion()" id="next-btn"
+                    class="px-6 py-2 bg-primary text-white font-semibold rounded-lg shadow-md hover:bg-primary-dark transition duration-150 disabled:opacity-50">
+                    Next →
+                </button>
+            </div>
+        </div>
     </div>
 
-    <!-- Load Socket.IO Client Library -->
-    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
-
+    <script src="/socket.io/socket.io.js"></script>
     <script>
-        const SOCKET_SERVER_URL = 'http://localhost:3000';
-        const timerValueEl = document.getElementById('timer-value');
-        const timerStatusEl = document.getElementById('timer-status');
-        const serverMessageEl = document.getElementById('server-message');
-        const durationInput = document.getElementById('duration-input');
-        const setTimerButton = document.getElementById('set-timer-button');
-        console.log(durationInput.value, "durationInput")
-        // Initialize Socket.IO connection
-        const socket = io(SOCKET_SERVER_URL);
+        // Use relative path since the server will serve this file
+        const SOCKET_SERVER_URL = 'http://localhost:3000'
 
-        // --- Utility Functions ---
+        // --- DUMMY EXAM STATE (START) ---
+        let examState = {
+            questions: [
+                {
+                    id: 101,
+                    text: "What does HTML stand for?",
+                    options: [
+                        "Hyper Text Markup Language",
+                        "High Tech Modern Language",
+                        "Home Tool Management Language",
+                        "Hyperlink and Text Markup Logic"
+                    ]
+                },
+                {
+                    id: 102,
+                    text: "Which CSS property is used to change the text color of an element?",
+                    options: [
+                        "background-color",
+                        "font-color",
+                        "color",
+                        "text-style"
+                    ]
+                },
+                {
+                    id: 103,
+                    text: "In JavaScript, which function is used to print content to the console?",
+                    options: [
+                        "print()",
+                        "log()",
+                        "console.write()",
+                        "console.log()"
+                    ]
+                },
+                {
+                    id: 104,
+                    text: "What is the primary function of a `while` loop in programming?",
+                    options: [
+                        "To define a function that executes immediately.",
+                        "To execute a block of code a specific number of times.",
+                        "To execute a block of code as long as a specified condition is true.",
+                        "To handle exceptions and errors."
+                    ]
+                },
+                {
+                    id: 105,
+                    text: "Which HTML tag is used to define an internal stylesheet?",
+                    options: [
+                        "script",
+                        "css",
+                        "style",
+                        "link"
+                    ]
+                },
+                {
+                    id: 106,
+                    text: "Which attribute is used in HTML to provide a unique name to an element?",
+                    options: [
+                        "class",
+                        "id",
+                        "name",
+                        "key"
+                    ]
+                },
+                {
+                    id: 107,
+                    text: "Which CSS property controls the size of text?",
+                    options: [
+                        "font-style",
+                        "text-size",
+                        "font-size",
+                        "text-style"
+                    ]
+                },
+                {
+                    id: 108,
+                    text: "Which of the following is NOT a JavaScript data type?",
+                    options: [
+                        "String",
+                        "Number",
+                        "Boolean",
+                        "Character"
+                    ]
+                },
+                {
+                    id: 109,
+                    text: "What is the correct syntax to link an external CSS file in HTML?",
+                    options: [
+                        "<style src='style.css'>",
+                        "<link rel='stylesheet' href='style.css'>",
+                        "<stylesheet>style.css</stylesheet>",
+                        "<css link='style.css'>"
+                    ]
+                },
+                {
+                    id: 110,
+                    text: "Which JavaScript keyword is used to declare a variable?",
+                    options: [
+                        "var",
+                        "let",
+                        "const",
+                        "All of the above"
+                    ]
+                },
+                {
+                    id: 111,
+                    text: "Which HTML element is used to display a numbered list?",
+                    options: [
+                        "<ul>",
+                        "<ol>",
+                        "<li>",
+                        "<dl>"
+                    ]
+                },
+                {
+                    id: 112,
+                    text: "In CSS, how do you select an element with id 'header'?",
+                    options: [
+                        "#header",
+                        ".header",
+                        "header",
+                        "*header"
+                    ]
+                },
+                {
+                    id: 113,
+                    text: "What is the output of `typeof null` in JavaScript?",
+                    options: [
+                        "'null'",
+                        "'object'",
+                        "'undefined'",
+                        "'number'"
+                    ]
+                },
+                {
+                    id: 114,
+                    text: "Which method is used to add an element at the end of an array in JavaScript?",
+                    options: [
+                        "push()",
+                        "pop()",
+                        "shift()",
+                        "unshift()"
+                    ]
+                },
+                {
+                    id: 115,
+                    text: "Which HTML attribute is used to display alternative text for an image?",
+                    options: [
+                        "title",
+                        "alt",
+                        "src",
+                        "caption"
+                    ]
+                }
+            ],
+            currentQuestionIndex: 0,
+            userAnswers: {
+                101: 0, // Answered
+                102: null,
+                103: 3, // Answered
+                104: 2, // Answered
+                105: null
+            },
+            examDurationSeconds: 5 * 60,
+            timeLeftSeconds: 5 * 60,
+            examId: 'sample-webdev-quiz',
+            isSubmitted: false
+        };
+        // --- DUMMY EXAM STATE (END) ---
 
-        function formatTwoDigits(number) {
-            return String(number).padStart(2, '0');
+        // --- CLIENT TIMER STATE (Will be constantly updated by server) ---
+        let clientTimerState = {
+            timeRemainingMs: examState.timeLeftSeconds * 1000,
+            status: "idle",
+            endTime: 0
+        };
+        let clientTimerInterval = null; // The interval to update the client UI clock every second
+
+        let socket;
+
+        // --- SOCKET.IO INITIALIZATION ---
+
+        function initSocket() {
+            // 1. Initial UI Setup (Timer button text)
+            const initialDuration = Math.floor(examState.examDurationSeconds / 60);
+            document.getElementById('duration-input').value = initialDuration;
+            document.getElementById('set-timer-button').textContent = `Set ${initialDuration} Min Timer`;
+
+            // Render the dummy exam content immediately for a smooth start
+            loadQuestion(examState.currentQuestionIndex);
+            renderNavGrid();
+            // Start the local UI timer initially, it will be overridden by the server on connect
+            startClientTimer();
+
+            // 2. Initialize Socket Connection
+            socket = io(SOCKET_SERVER_URL);
+
+            socket.on('connect', () => {
+                const userIdEl = document.getElementById('user-id');
+                userIdEl.textContent = socket.id;
+                userIdEl.classList.remove('bg-red-100');
+                userIdEl.classList.add('bg-gray-100');
+                console.log('Connected with ID:', socket.id);
+
+                // Request the initial exam state upon connection
+                socket.emit('requestExamState', { examId: examState.examId });
+            });
+
+            socket.on('disconnect', () => {
+                const userIdEl = document.getElementById('user-id');
+                userIdEl.textContent = 'Disconnected. Reconnecting...';
+                userIdEl.classList.remove('bg-gray-100');
+                userIdEl.classList.add('bg-red-100');
+            });
+
+            // 3. Listener for the Server Timer Update (New!)
+            socket.on('timer:update', (newState) => {
+                // The server's time is authoritative. Update our local client state.
+                clientTimerState = {
+                    timeRemainingMs: newState.timeRemainingMs,
+                    status: newState.status,
+                    endTime: newState.endTime
+                };
+
+                // The startClientTimer function will now use this new, authoritative time
+                // to calculate the remaining time in its interval.
+                if (newState.status === 'running') {
+                    startClientTimer();
+                } else if (newState.status === 'finished') {
+                    stopClientTimer(true); // Stop and display 'TIME UP!'
+                    // Assuming exam submission is also handled by the server when time is up
+                    if (!examState.isSubmitted) {
+                        applySubmissionState();
+                    }
+                } else if (newState.status === 'idle') {
+                    stopClientTimer(false); // Stop but show the default "--:--"
+                }
+            });
+
+            // 4. Listener for Exam State Update (from original logic)
+            socket.on('examStateUpdate', (newState) => {
+                // Merge and update the local state from the server (questions, answers, submission status)
+                examState = { ...examState, ...newState };
+
+                if (examState.isSubmitted) {
+                    applySubmissionState();
+                    return;
+                }
+
+                loadQuestion(examState.currentQuestionIndex);
+                renderNavGrid();
+            });
         }
 
-        /**
-         * Updates the HTML elements based on server response data.
-         * This function is called every second by the server's 'timer:update' push event.
-         * @param {object} data - The time state object pushed from the server.
-         */
-        function updateUI(data) {
-            const { formattedTime, status, timeRemainingMs, endTime } = data;
 
-            // 1. Update Time Display
-            if (timeRemainingMs > 0) {
-                const timeString = [formattedTime.hours, formattedTime.minutes, formattedTime.seconds]
-                    .map(formatTwoDigits)
-                    .join(':');
-                timerValueEl.textContent = timeString;
-            } else if (status === 'finished') {
-                timerValueEl.textContent = "00:00:00";
+        // --- TIMER LOGIC (CLIENT-SIDE) ---
+
+        function formatTime(ms) {
+            let totalSeconds = Math.max(0, Math.floor(ms / 1000));
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function stopClientTimer(isFinished) {
+            if (clientTimerInterval) {
+                clearInterval(clientTimerInterval);
+                clientTimerInterval = null;
+            }
+            const timerElement = document.getElementById('timer');
+            const timerCard = timerElement.parentElement;
+            if (isFinished) {
+                timerElement.textContent = "TIME UP!";
+                timerCard.className = timerCard.className.replace(/bg-(primary|yellow-600)/g, 'bg-danger');
             } else {
-                timerValueEl.textContent = "---";
-            }
-
-            // 2. Update Status and Styling
-            timerValueEl.classList.remove('finished');
-            if (status === 'running') {
-                timerStatusEl.textContent = "Timer in progress (Real-Time)";
-                const endDate = new Date(endTime);
-                serverMessageEl.textContent = `Ends at: ${endDate.toLocaleTimeString()}`;
-            } else if (status === 'finished') {
-                timerStatusEl.textContent = "Countdown Complete!";
-                timerValueEl.classList.add('finished');
-                serverMessageEl.textContent = "Set a new timer to begin.";
-            } else { // idle
-                timerStatusEl.textContent = "Timer is Idle";
-                serverMessageEl.textContent = "Ready to start a new countdown.";
+                timerElement.textContent = "--:--";
+                timerCard.className = timerCard.className.replace(/bg-(danger|yellow-600)/g, 'bg-primary');
             }
         }
 
-        // --- Socket.IO Event Listeners ---
+        function startClientTimer() {
+            // Stop any existing interval to prevent duplicates
+            if (clientTimerInterval) {
+                clearInterval(clientTimerInterval);
+            }
 
-        socket.on('connect', () => {
-            console.log('Connected to server via Socket.IO');
-            setTimerButton.disabled = false;
-            timerStatusEl.textContent = "Connected. Synchronizing...";
-        });
+            const timerElement = document.getElementById('timer');
+            const timerCard = timerElement.parentElement;
 
-        // Listen for real-time updates pushed by the server
-        socket.on('timer:update', (data) => {
-            updateUI(data);
-        });
+            const updateClientUI = () => {
+                const timeRemainingMs = clientTimerState.endTime - Date.now();
 
-        socket.on('disconnect', () => {
-            console.log('Disconnected from server');
-            timerStatusEl.textContent = "Disconnected from server.";
-            setTimerButton.disabled = true;
-        });
+                if (timeRemainingMs <= 0) {
+                    stopClientTimer(true);
+                    return;
+                }
 
-        socket.on('error', (message) => {
-            console.error("Server Error:", message);
-            serverMessageEl.textContent = `Server Error: ${message}`;
-        });
+                // UI color feedback
+                const time = Math.floor(timeRemainingMs / 1000);
+                if (time <= 60) {
+                    timerCard.className = timerCard.className.replace(/bg-(primary|yellow-600)/g, 'bg-danger');
+                } else if (time <= 120) {
+                    timerCard.className = timerCard.className.replace(/bg-(primary|danger)/g, 'bg-yellow-600');
+                } else {
+                    timerCard.className = timerCard.className.replace(/bg-(danger|yellow-600)/g, 'bg-primary');
+                }
+
+                timerElement.textContent = formatTime(timeRemainingMs);
+            };
+
+            // Start the interval and call immediately
+            updateClientUI();
+            clientTimerInterval = setInterval(updateClientUI, 500); // 500ms update for smoother visual countdown
+        }
 
 
-        // --- Start Timer Function (Client Trigger) ---
-        function startNewTimer() {
-            const DEFAULT_MINUTES = 2; // Default if input is empty or invalid
+        function setTimer() {
+            const inputElement = document.getElementById('duration-input');
+            const newDurationMinutes = parseInt(inputElement.value, 10);
+            const durationSeconds = newDurationMinutes * 60;
 
-            const minutes = parseInt(durationInput.value, 10);
-            if (isNaN(minutes) || minutes <= 0) {
-                minutes = DEFAULT_MINUTES;
-                // Optional: Visually update the input field to reflect the default used
-                durationInput.value = DEFAULT_MINUTES;
-                serverMessageEl.textContent = "Error: Please enter a duration of 1 minute or more.";
+            if (newDurationMinutes > 0) {
+                const buttonElement = document.getElementById('set-timer-button');
+                buttonElement.textContent = `Set ${newDurationMinutes} Min Timer`;
+
+                if (socket && socket.connected) {
+                    // Emit the duration in SECONDS, as expected by the server
+                    socket.emit('timer:start', {
+                        // The server is expecting a property named 'duration' which holds the seconds value
+                        duration: durationSeconds
+                    });
+                } else {
+                    alert('Socket disconnected. Cannot start timer via server. Check your backend.');
+                }
+            } else {
+                alert('Please enter a duration greater than 0 minutes.');
+            }
+        }
+        window.setTimer = setTimer;
+
+        // --- OTHER CORE LOGIC (mostly unchanged) ---
+
+        function emitAnswer(qId, answerIndex) {
+            if (!socket || examState.isSubmitted) return;
+
+            // Optimistic UI update
+            examState.userAnswers[qId] = answerIndex;
+            loadQuestion(examState.currentQuestionIndex);
+
+            // Emit to server
+            if (socket.connected) {
+                socket.emit('submitAnswer', {
+                    examId: examState.examId,
+                    qId: qId,
+                    answerIndex: answerIndex
+                });
+            }
+        }
+
+        function submitExam() {
+            if (examState.isSubmitted) return;
+
+            // Use window.confirm and store the result
+            const status = window.confirm(
+                "Are you sure you want to finish and submit the exam? You cannot make changes afterwards."
+            );
+
+            if (!status) {
+                console.log("User cancelled submission.");
+
                 return;
             }
+            console.log("socket.connected", socket, socket.connected);
+            if (socket && socket.connected) {
+                // console.log("exam submit data", { examId: examState.examId })
+                socket.emit('submitExam', { message: examState.examId });
+            } else {
+                examState.isSubmitted = true;
+                applySubmissionState();
+            }
+        }
+        window.submitExam = submitExam;
 
-            const durationSeconds = minutes * 60;
-            setTimerButton.disabled = true;
-            setTimerButton.textContent = "Sending Request...";
-
-            // Emit the event to the server to start the timer
-            socket.emit('timer:start', { duration: durationSeconds });
-
-            // Re-enable button quickly, as the server will handle the actual broadcast
-            setTimeout(() => {
-                setTimerButton.disabled = false;
-                setTimerButton.textContent = `Set ${minutes} Minute Timer`;
-            }, 500);
+        function applySubmissionState() {
+            document.getElementById('question-text').textContent = "EXAM SUBMITTED. Thank you!";
+            document.getElementById('options-container').innerHTML = `<div class="text-success font-bold text-center p-8">Your answers have been locked and saved.</div>`;
+            document.getElementById('prev-btn').disabled = true;
+            document.getElementById('next-btn').disabled = true;
+            document.getElementById('submit-btn').disabled = true;
+            stopClientTimer(false); // Stop the local UI timer
         }
 
-        // --- Initialization ---
+        // --- UI AND NAVIGATION LOGIC (Unchanged functions, but now rely on examState updates) ---
 
-        // 1. Attach event listeners
-        setTimerButton.addEventListener('click', startNewTimer);
-        durationInput.addEventListener('input', () => {
-            const minutes = durationInput.value;
-            setTimerButton.textContent = `Set ${minutes} Minute Timer`;
-        });
+        function loadQuestion(index = examState.currentQuestionIndex) {
+            if (examState.questions.length === 0 || examState.isSubmitted) return;
+            if (index < 0) index = 0;
+            if (index >= examState.questions.length) index = examState.questions.length - 1;
 
-        // Initial state
-        setTimerButton.disabled = true; // Disabled until connected to server
+            examState.currentQuestionIndex = index;
+            const q = examState.questions[index];
+            const selectedAnswer = examState.userAnswers[q.id];
+
+            document.getElementById('current-q-index').textContent = index + 1;
+            document.getElementById('question-text').textContent = `${index + 1}. ${q.text}`;
+
+            document.getElementById('prev-btn').disabled = index === 0 || examState.isSubmitted;
+            document.getElementById('next-btn').disabled = index === examState.questions.length - 1 || examState.isSubmitted;
+
+            const optionsContainer = document.getElementById('options-container');
+            optionsContainer.innerHTML = q.options.map((option, optionIndex) => {
+                const isSelected = optionIndex === selectedAnswer;
+                const baseClasses = "flex items-center p-4 rounded-xl cursor-pointer transition duration-150 border-2";
+                const stateClasses = isSelected
+                    ? "bg-primary text-white border-primary shadow-lg"
+                    : "bg-gray-50 text-gray-800 border-gray-200 hover:bg-gray-100";
+
+                return `
+                    <div 
+                        class="${baseClasses} ${stateClasses}"
+                        onclick="selectAnswer(${q.id}, ${optionIndex})"
+                        data-option-index="${optionIndex}"
+                        ${examState.isSubmitted ? 'style="pointer-events: none;"' : ''}
+                    >
+                        <span class="font-bold mr-4">${String.fromCharCode(65 + optionIndex)}.</span>
+                        <p class="flex-grow">${option}</p>
+                        ${isSelected ? '<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>' : ''}
+                    </div>
+                `;
+            }).join('');
+
+            const statusEl = document.getElementById('q-status');
+            if (selectedAnswer !== null && selectedAnswer !== undefined) {
+                statusEl.textContent = 'Answered';
+                statusEl.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-success text-white';
+            } else {
+                statusEl.textContent = 'Unanswered';
+                statusEl.className = 'px-3 py-1 text-xs font-semibold rounded-full bg-yellow-100 text-yellow-800';
+            }
+
+            renderNavGrid();
+        }
+        window.loadQuestion = loadQuestion;
+
+        function selectAnswer(qId, optionIndex) {
+            if (examState.isSubmitted) return;
+            emitAnswer(qId, optionIndex);
+        }
+        window.selectAnswer = selectAnswer;
+
+        function prevQuestion() {
+            if (examState.currentQuestionIndex > 0) {
+                loadQuestion(examState.currentQuestionIndex - 1);
+            }
+        }
+        window.prevQuestion = prevQuestion;
+
+        function nextQuestion() {
+            if (examState.currentQuestionIndex < examState.questions.length - 1) {
+                loadQuestion(examState.currentQuestionIndex + 1);
+            }
+        }
+        window.nextQuestion = nextQuestion;
+
+
+        function renderNavGrid() {
+            if (examState.questions.length === 0) return;
+            const navContainer = document.getElementById('question-nav');
+            const totalAnswered = examState.questions.filter(q => examState.userAnswers[q.id] !== null && examState.userAnswers[q.id] !== undefined).length;
+
+            const navHeader = document.getElementById('nav-header');
+            if (navHeader) {
+                navHeader.textContent = `Question Navigator (${totalAnswered}/${examState.questions.length})`;
+            }
+
+            navContainer.innerHTML = examState.questions.map((q, index) => {
+                const qId = q.id;
+                const isAnswered = examState.userAnswers[qId] !== null && examState.userAnswers[qId] !== undefined;
+                const isCurrent = index === examState.currentQuestionIndex;
+
+                let baseClasses = "flex items-center justify-center w-10 h-10 rounded-lg font-bold text-sm transition duration-150 shadow-md cursor-pointer";
+
+                if (isCurrent) {
+                    baseClasses += " ring-4 ring-primary ring-opacity-50 border-4 border-white bg-primary text-white scale-110";
+                } else if (isAnswered) {
+                    baseClasses += " bg-success text-white hover:bg-green-600";
+                } else {
+                    baseClasses += " bg-gray-200 text-gray-700 hover:bg-gray-300";
+                }
+
+                return `
+                    <button 
+                        class="${baseClasses}" 
+                        onclick="loadQuestion(${index})"
+                        ${examState.isSubmitted ? 'disabled' : ''}
+                    >
+                        ${index + 1}
+                    </button>
+                `;
+            }).join('');
+        }
+        window.renderNavGrid = renderNavGrid;
+
+        // --- INITIAL KICKOFF ---
+        window.onload = initSocket;
+
+        // function confirm(message) {
+        //     return window.confirm(message);
+        // }
+
     </script>
 </body>
 

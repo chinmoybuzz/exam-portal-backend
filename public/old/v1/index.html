@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Socket.IO Synchronized Timer Client</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f9fb;
+        }
+
+        .timer-display {
+            font-size: 4rem;
+            font-weight: 700;
+            color: #10b981;
+            /* Emerald 500 */
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .card {
+            background: white;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e5e7eb;
+        }
+
+        .finished {
+            color: #ef4444;
+            /* Red 500 */
+        }
+    </style>
+</head>
+
+<body class="min-h-screen flex flex-col items-center justify-center p-4">
+
+    <div class="card rounded-xl p-8 w-full max-w-md text-center">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4">Global Socket.IO Timer</h1>
+        <p class="text-lg font-medium text-gray-500 mb-4" id="timer-status">Connecting to server...</p>
+
+        <div id="timer-value" class="timer-display">
+            --:--:--
+        </div>
+
+        <p class="text-sm text-gray-400 mt-2" id="server-message"></p>
+    </div>
+
+    <!-- Timer Control Card -->
+    <div class="card rounded-xl p-6 w-full max-w-md mt-6">
+        <h2 class="text-xl font-semibold text-gray-700 mb-4">Start New Timer (Server Reset)</h2>
+        <div class="flex flex-col sm:flex-row gap-4">
+            <input type="number" id="duration-input" value="5" min="1"
+                class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-emerald-500 focus:border-emerald-500"
+                placeholder="Duration in minutes">
+            <button id="set-timer-button"
+                class="bg-emerald-600 text-white font-semibold py-3 px-6 rounded-lg hover:bg-emerald-700 disabled:opacity-50 transition duration-150">
+                Set 5 Minute Timer
+            </button>
+        </div>
+        <p class="text-xs text-gray-400 mt-2">This sends a Socket.IO message to reset the timer for everyone.</p>
+    </div>
+
+    <!-- Load Socket.IO Client Library -->
+    <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
+
+    <script>
+        const SOCKET_SERVER_URL = 'http://localhost:3000';
+        const timerValueEl = document.getElementById('timer-value');
+        const timerStatusEl = document.getElementById('timer-status');
+        const serverMessageEl = document.getElementById('server-message');
+        const durationInput = document.getElementById('duration-input');
+        const setTimerButton = document.getElementById('set-timer-button');
+        console.log(durationInput.value, "durationInput")
+        // Initialize Socket.IO connection
+        const socket = io(SOCKET_SERVER_URL);
+
+        // --- Utility Functions ---
+
+        function formatTwoDigits(number) {
+            return String(number).padStart(2, '0');
+        }
+
+        /**
+         * Updates the HTML elements based on server response data.
+         * This function is called every second by the server's 'timer:update' push event.
+         * @param {object} data - The time state object pushed from the server.
+         */
+        function updateUI(data) {
+            const { formattedTime, status, timeRemainingMs, endTime } = data;
+
+            // 1. Update Time Display
+            if (timeRemainingMs > 0) {
+                const timeString = [formattedTime.hours, formattedTime.minutes, formattedTime.seconds]
+                    .map(formatTwoDigits)
+                    .join(':');
+                timerValueEl.textContent = timeString;
+            } else if (status === 'finished') {
+                timerValueEl.textContent = "00:00:00";
+            } else {
+                timerValueEl.textContent = "---";
+            }
+
+            // 2. Update Status and Styling
+            timerValueEl.classList.remove('finished');
+            if (status === 'running') {
+                timerStatusEl.textContent = "Timer in progress (Real-Time)";
+                const endDate = new Date(endTime);
+                serverMessageEl.textContent = `Ends at: ${endDate.toLocaleTimeString()}`;
+            } else if (status === 'finished') {
+                timerStatusEl.textContent = "Countdown Complete!";
+                timerValueEl.classList.add('finished');
+                serverMessageEl.textContent = "Set a new timer to begin.";
+            } else { // idle
+                timerStatusEl.textContent = "Timer is Idle";
+                serverMessageEl.textContent = "Ready to start a new countdown.";
+            }
+        }
+
+        // --- Socket.IO Event Listeners ---
+
+        socket.on('connect', () => {
+            console.log('Connected to server via Socket.IO');
+            setTimerButton.disabled = false;
+            timerStatusEl.textContent = "Connected. Synchronizing...";
+        });
+
+        // Listen for real-time updates pushed by the server
+        socket.on('timer:update', (data) => {
+            updateUI(data);
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from server');
+            timerStatusEl.textContent = "Disconnected from server.";
+            setTimerButton.disabled = true;
+        });
+
+        socket.on('error', (message) => {
+            console.error("Server Error:", message);
+            serverMessageEl.textContent = `Server Error: ${message}`;
+        });
+
+
+        // --- Start Timer Function (Client Trigger) ---
+        function startNewTimer() {
+            const DEFAULT_MINUTES = 2; // Default if input is empty or invalid
+
+            const minutes = parseInt(durationInput.value, 10);
+            if (isNaN(minutes) || minutes <= 0) {
+                minutes = DEFAULT_MINUTES;
+                // Optional: Visually update the input field to reflect the default used
+                durationInput.value = DEFAULT_MINUTES;
+                serverMessageEl.textContent = "Error: Please enter a duration of 1 minute or more.";
+                return;
+            }
+
+            const durationSeconds = minutes * 60;
+            setTimerButton.disabled = true;
+            setTimerButton.textContent = "Sending Request...";
+
+            // Emit the event to the server to start the timer
+            socket.emit('timer:start', { duration: durationSeconds });
+
+            // Re-enable button quickly, as the server will handle the actual broadcast
+            setTimeout(() => {
+                setTimerButton.disabled = false;
+                setTimerButton.textContent = `Set ${minutes} Minute Timer`;
+            }, 500);
+        }
+
+        // --- Initialization ---
+
+        // 1. Attach event listeners
+        setTimerButton.addEventListener('click', startNewTimer);
+        durationInput.addEventListener('input', () => {
+            const minutes = durationInput.value;
+            setTimerButton.textContent = `Set ${minutes} Minute Timer`;
+        });
+
+        // Initial state
+        setTimerButton.disabled = true; // Disabled until connected to server
+    </script>
+</body>
+
+</html>
