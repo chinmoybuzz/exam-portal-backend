@@ -1,4 +1,4 @@
-const QuestionService = require("../services/Question.service");
+const QuestionService = require("../services/question.service");
 
 const QuestionList = async (req, res) => {
   try {
