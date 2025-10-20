@@ -82,7 +82,7 @@ exports.roleList = async (params) => {
 
 exports.roleAdd = async (params) => {
   try {
-    // console.log("params data", params);
+    // console.log("params data", params)
     const { role } = params;
     const checkData = await RoleModel.findOne({ role, deleteAt: null });
     if (checkData) {
