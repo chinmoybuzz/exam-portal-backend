@@ -4,8 +4,12 @@ const socketIo = require("socket.io");
 const socketAuthMiddleware = require("../socket/middlewares/auth");
 
 //exam portal
-const timerHandler = require("../socket/handler/timer");
+const timer = require("../socket/handler/timer");
+const timerHandler = require("../socket/handler/timer.handler");
 const examHandler = require("../socket/handler/exam");
+
+//Recover Running Timers After server restarts
+const { recoverRunningTimers } = require("../socket/handler/timer.handler");
 //handlers
 const chatHandler = require("../socket/handler/chatHandler");
 const notificationHandler = require("../socket/handler/notificationHandler");
@@ -14,7 +18,7 @@ const continueDataHandler = require("../socket/handler/continueData");
 const _ = require("lodash");
 let io;
 
-function initialize(server) {
+async function initialize(server) {
   io = socketIo(server, {
     cors: {
       origin: "*", // Replace with the correct port
@@ -22,8 +26,8 @@ function initialize(server) {
       credentials: true,
     },
   });
-
-  io.use(socketAuthMiddleware);
+  await recoverRunningTimers(getIo);
+  // io.use(socketAuthMiddleware);
 
   io.on("connection", (socket) => {
     console.log("Client connected:", socket.id);

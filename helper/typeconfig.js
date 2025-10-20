@@ -1,8 +1,7 @@
 const Status = [1, 2, 3];
 //{ ACTIVE: 1, INACTIVE: 2, PENDING: 3 } / {  accept: 1, reject: 2, pending: 3 };
-const ratingNumber=[0,1,2,3,4,5];
-
-
+const ratingNumber = [0, 1, 2, 3, 4, 5];
+const roomTimerStatus = { RUNNING: 1, FINISHED: 2, PAUSED: 3 };
 
 // --------------------------------------------
 const ChatStatus = [1, 2, 3, 4]; // { requested: 1, accepted: 2, rejected: 3, left: 4 };
@@ -87,6 +86,7 @@ const contactType = ["CONTACT", "ENQUIRY", "COMPLAIN"];
 module.exports = {
   Status,
   ratingNumber,
+  roomTimerStatus,
   ChatStatus,
   CategoryTypes,
   PlanDurationType,
